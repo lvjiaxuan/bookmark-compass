@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmark Compass",
+  "version": "0.1.0",
+  "description": "用浏览器本地 AI 推荐收藏位置。",
+  "permissions": ["bookmarks", "activeTab", "scripting"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArDY6YW88L9vo8tBM6rqbwDF48S14ZdIve4ofFjFVkHompDtFk4KK2FLOSTEG21nW1qz3z4oEVEwl3fJqfDkV0d6kwAKrY//357PhG3MIROuk7/GHeZ5GqG7//MdxGWbBxAtPeFVMFlUsQt0xRRbb0pjB/xMIGZR3bgnmXBbJ6mNmUvKURkr60b+eqBmAKzphSJQv8cWWL3eIgalMn6NsFbmEfmMW+veDqEzd43eaIDiwcjt4Gmfb104ivlIwM5STAelNeUAWmlo5E1y75AD4FC7VQhYE8gERoM/9o4AosiNO4vHb1n94Oo7DqnHDxmcLLlO1/XU7m38/W9ULh4q9IwIDAQAB",
+  "action": {
+    "default_title": "保存到收藏夹",
+    "default_popup": "popup.html"
+  }
+}

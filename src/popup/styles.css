@@ -1,0 +1,260 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1f1f1f;
+  --muted: #5f6368;
+  --line: #e0e0e0;
+  --accent: #1a73e8;
+  --hover: rgba(26, 115, 232, 0.08);
+  --ok: #137333;
+  --warn: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202124;
+    --fg: #e8eaed;
+    --muted: #9aa0a6;
+    --line: #3c4043;
+    --accent: #8ab4f8;
+    --hover: rgba(138, 180, 248, 0.12);
+    --ok: #81c995;
+    --warn: #f28b82;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 380px;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+header.page {
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+#page-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#page-url {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+section.ai {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: pre-line;
+}
+
+.status[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.status[data-tone="warn"] {
+  color: var(--warn);
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hover);
+  overflow: hidden;
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ghost {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.tree-wrap {
+  max-height: 300px;
+  overflow: auto;
+  padding: 4px 6px 8px;
+}
+
+.section-label {
+  margin: 4px 8px 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tree,
+.children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  padding: 3px 6px 3px calc(var(--depth, 0) * 14px);
+  border-radius: 6px;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.toggle {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toggle:disabled {
+  visibility: hidden;
+}
+
+.choice {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.choice input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.choice input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+input:checked + .name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.target {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+button {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+#save {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+#save:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  #save {
+    color: #202124;
+  }
+}

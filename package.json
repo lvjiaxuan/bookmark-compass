@@ -1,0 +1,28 @@
+{
+  "name": "bookmark-compass",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "用浏览器本地 AI 推荐收藏位置的 Chrome/Edge 扩展",
+  "scripts": {
+    "dev": "extension dev --browser chrome --no-telemetry",
+    "build": "npm run build:chrome && npm run build:edge",
+    "build:chrome": "extension build --browser chrome --no-telemetry",
+    "build:edge": "extension build --browser edge --no-telemetry",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-test-isolation=none \"tests/*.test.ts\"",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:compat": "playwright test --project=chrome --project=msedge",
+    "test:e2e:chrome": "playwright test --project=chrome",
+    "test:e2e:edge": "playwright test --project=msedge",
+    "test:e2e:install": "playwright install chromium",
+    "check": "npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
+    "extension": "^4.1.38",
+    "typescript": "^7.0.2"
+  }
+}

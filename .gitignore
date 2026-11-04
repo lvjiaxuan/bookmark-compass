@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.npm-cache/
+.probe/
+test-results/
+playwright-report/
+.e2e-profile-*/
+
+# Extension.js local session state
+.extension-js
