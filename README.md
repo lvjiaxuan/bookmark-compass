@@ -2,9 +2,9 @@
 
 **为每个网页找到合适的书签文件夹。**
 
-Bookmark Compass 是一款 Chrome / Microsoft Edge 扩展：点击工具栏图标打开保存面板，读取当前网页的标题、URL 和元数据，用浏览器本地 AI 从现有收藏夹里推荐位置。推荐只是预选，保存前仍由你确认。
+Bookmark Compass 是一款 Chrome / Microsoft Edge 扩展：点击工具栏图标打开保存面板，读取当前网页的标题、URL 和选定元数据；浏览器提供本地 AI 时，可从现有收藏夹推荐位置。推荐只是预选，保存前仍由你确认，也可手动选择。
 
-> 状态：MVP 已实现，已提供 Chromium / Chrome / Edge 自动测试入口；完整兼容性仍需结合测试结果与真实模型手动验收（见下文）。
+> 阶段 1–2 实现完成，2026-11-12 类型检查、单元测试、Chrome / Edge 构建及 Chromium / 系统 Edge 完整 E2E 均通过；系统 Chrome 未安装，E2E 未能启动。阶段 3 尚未实施；不代表 Chrome 全流程兼容、无障碍或商店合规验收已通过。
 
 ## 功能
 
@@ -14,9 +14,9 @@ Bookmark Compass 是一款 Chrome / Microsoft Edge 扩展：点击工具栏图�
 - AI 消息栏底部显示本次推荐会话的上下文配额（已用 / 总量及剩余），推理结束后保留最后读数；浏览器未提供配额字段时显示说明。
 - 本地模型尚未下载时，由你点击按钮开始下载（浏览器要求用户手势），下载过程显示进度条。
 - 浏览器没有开放本地 AI 时，给出对应开关地址（Edge 用 `edge://flags/#edge-llm-prompt-api-for-default`，Chrome 用 `chrome://flags/#prompt-api-for-gemini-nano`），可尝试打开或复制。
-- 没有推荐、AI 不可用、模型下载失败或推理出错时，默认选中收藏栏根目录，面板照常可用。
-- 只有点击「保存」才创建书签；关闭面板不修改收藏夹。
-- 保存前重新确认目标文件夹仍存在且是文件夹。手动改选后，迟到的 AI 结果不会覆盖你的选择。
+- 没有推荐、AI 不可用、模型下载失败或推理出错时，可继续手动选择。`none` 表示模型没有合适候选：保留已有手动选择；若尚未手动选择，则使用实际默认目录（优先收藏栏，否则第一个顶层目录）。
+- 只有点击「保存」才创建书签；关闭面板不修改收藏夹。保存开始后锁定目标并取消推荐，迟到的 AI 不会覆盖保存目标或提示；成功后防止重复提交，失败后可重试。
+- 自动展开推荐路径时原地更新目录并保留键盘焦点；收藏位置组及展开控件有明确的可访问名称和关联，悬停状态使用显式配色，并尊重系统的减少动态效果偏好。
 
 ## 环境要求
 
@@ -43,19 +43,29 @@ npm run test:e2e:edge    # 只测试系统 Edge
 
 ## 端到端测试
 
-`tests/e2e/` 用 Playwright 加载扩展并驱动面板。三个项目共用测试用例：
+`tests/e2e/` 用 Playwright 加载扩展并驱动面板。新增的 `modernization.spec.ts` 为阶段 1–2 提供回归用例，已随本轮完整 E2E 在 Chromium 和系统 Edge 中通过。三个项目共用测试用例：
 
-| 项目 | 浏览器 | 扩展产物 | 命令 |
-| --- | --- | --- | --- |
-| `chromium` | Playwright 自带的 Chromium | `dist/chrome` | `npm run test:e2e` |
-| `chrome` | 系统安装的 Google Chrome | `dist/chrome` | `npm run test:e2e:chrome` |
-| `msedge` | 系统安装的 Microsoft Edge | `dist/edge` | `npm run test:e2e:edge` |
+| 项目       | 浏览器                     | 扩展产物      | 命令                      |
+| ---------- | -------------------------- | ------------- | ------------------------- |
+| `chromium` | Playwright 自带的 Chromium | `dist/chrome` | `npm run test:e2e`        |
+| `chrome`   | 系统安装的 Google Chrome   | `dist/chrome` | `npm run test:e2e:chrome` |
+| `msedge`   | 系统安装的 Microsoft Edge  | `dist/edge`   | `npm run test:e2e:edge`   |
 
 先运行 `npm run build`。Chromium 需要先运行一次 `npm run test:e2e:install`；Chrome、Edge 需要自行安装，缺少浏览器时测试会失败，不会跳过或退回 Chromium。`npm run test:e2e:compat` 一起验证两个品牌浏览器，使用 `npx playwright test --project=chrome --project=msedge --headed` 可观察测试窗口。运行 `npx playwright show-report` 查看 HTML 报告及 `browser-capabilities` 附件，其中记录浏览器版本信息、权限、原生 AI 入口和可用性。
 
 Chrome、Edge 已移除原先的命令行侧载开关。品牌浏览器测试通过 Playwright 的调试 pipe 和 `Extensions.loadUnpacked` 安装扩展，使用 `--enable-unsafe-extension-debugging`；需要目标浏览器支持该 CDP 命令且未被企业策略阻止。Edge 构建会移除 manifest 的 `key`，测试使用安装返回的实际 ID。Chromium 仍使用原有的命令行加载方式。每个测试使用独立临时 profile，退出后删除，不接触日常浏览器数据。
 
 自动化覆盖默认收藏栏、对应浏览器的 AI 开关提示、模型下载按钮与进度、`none` 回退、会话配额，以及真实书签写入。AI 流程使用模拟接口；额外的原生能力测试不注入模拟 API，验证扩展初始化、权限和无 AI 时的降级，并记录实际能力。原生 API 缺失不会让兼容性测试失败，因为这是产品支持的降级场景；能力附件中的可用性记录不代表模型下载或推理已通过。
+
+### 本轮验证结果（2026-11-12）
+
+- `npm run check`、`tsc --noEmit` 通过，node 单元测试 36/36 通过。
+- `npm run build` 的 Chrome / Edge 构建成功；`activeTab` 访问范围警告及 Edge 自动移除 `key` 属于现有设计，不应为消除警告扩大权限。
+- Chromium 完整 E2E 41/41 通过；系统 Edge 完整 E2E 41/41 通过。
+- 系统 Chrome E2E 已尝试，但 Playwright 找不到 `C:/Users/PC/AppData/Local/Google/Chrome/Application/chrome.exe`；`Program Files` 与 `Program Files (x86)` 下也无 Chrome，未安装浏览器，不能声称系统 Chrome 回归或全流程通过。
+- 已修复新增 E2E 夹具缺少 `syncing` 类型字段的问题；`fieldset` 的 disabled 断言改用 `toHaveJSProperty`，并保留子 radio 的 `toBeDisabled` 断言。
+- `git diff --check` 通过。以上为本轮已完成的验证记录；版本未提升，未商店发布。
+- 真实工具栏用户手势、真实模型下载与推理、辅助技术与实测对比度、商店截图和发布者信息仍未验收。
 
 ### 真实 Chrome / Edge 手动验收
 
@@ -79,10 +89,10 @@ Chrome、Edge 已移除原先的命令行侧载开关。品牌浏览器测试通
 
 ## 权限
 
-| 权限 | 用途 |
-| --- | --- |
-| `bookmarks` | 读取收藏夹树、校验目标文件夹、创建书签 |
-| `activeTab` | 点击图标后读取当前标签页的标题与 URL |
+| 权限        | 用途                                                              |
+| ----------- | ----------------------------------------------------------------- |
+| `bookmarks` | 读取收藏夹树、校验目标文件夹、创建书签                            |
+| `activeTab` | 点击图标后读取当前标签页的标题与 URL                              |
 | `scripting` | 仅在打开面板时读取当前页的 `description`、`keywords` 等 meta 标签 |
 
 不申请 `<all_urls>`、历史记录或远程主机权限，也不注册常驻内容脚本。
@@ -118,7 +128,7 @@ tests/                 node:test 单元测试
 - 模型下载需要点按钮触发，下载期间请保持面板打开；关闭面板会中断这次的进度显示。
 - 扩展无权直接修改浏览器开关，也通常打不开 `edge://`、`chrome://` 页面，按钮会退回复制地址。
 - 候选文件夹超过 120 个时只有前 120 个参与推荐，其余仍可手动选择。
-- 没有提供扩展图标，浏览器显示默认图标。
+- 清单引用 `src/icons/icon16.png`、`icon32.png`、`icon48.png` 和 `icon128.png`；仓库中存在这些图标文件。
 - 浏览器内部页面（如 `chrome://settings`）无法注入脚本，可以浏览收藏夹但不能保存。
 
 ## 设计文档

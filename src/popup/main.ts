@@ -17,6 +17,7 @@ const urlEl = el<HTMLParagraphElement>('page-url');
 const statusEl = el<HTMLParagraphElement>('status');
 const quotaEl = el<HTMLParagraphElement>('ai-quota');
 const treeEl = el<HTMLUListElement>('tree');
+const folderPicker = el<HTMLFieldSetElement>('folder-picker');
 const targetEl = el<HTMLParagraphElement>('target');
 const saveBtn = el<HTMLButtonElement>('save');
 const cancelBtn = el<HTMLButtonElement>('cancel');
@@ -36,12 +37,16 @@ let folders: FolderNode[] = [];
 let target: FolderNode | null = null;
 let page: PageInfo | null = null;
 let userPicked = false;
-let saving = false;
+let saveState: 'idle' | 'saving' | 'saved' = 'idle';
+let disposed = false;
+let aiGeneration = 0;
+let aiAction: (() => void) | null = null;
 let aiApi: LanguageModelApi | null = null;
 let aiBusy = false;
 let activeController: AbortController | null = null;
 let activeSession: PromptSession | null = null;
 const expanded = new Set<string>();
+const expandFolder = new Map<string, (open: boolean) => void>();
 
 // 浏览器要求先在该页打开对应开关，扩展没有权限直接改这些设置
 const AI_FLAGS_URL = navigator.userAgent.includes('Edg/')
@@ -65,7 +70,13 @@ function updateQuota(session: PromptSession): void {
 
 function updateTarget(): void {
   targetEl.textContent = target ? `目标：${target.path}` : '目标：未选择';
-  saveBtn.disabled = !target || !page?.url || saving;
+  saveBtn.disabled = !target || !page?.url || saveState !== 'idle';
+  folderPicker.disabled = saveState !== 'idle';
+  saveBtn.textContent = saveState === 'saved' ? '已保存' : saveState === 'saving' ? '正在保存…' : '保存';
+}
+
+function isCurrentAi(generation: number): boolean {
+  return !disposed && saveState === 'idle' && generation === aiGeneration;
 }
 
 function checkedRadio(folderId: string): HTMLInputElement | null {
@@ -73,6 +84,7 @@ function checkedRadio(folderId: string): HTMLInputElement | null {
 }
 
 function selectFolder(folder: FolderNode, byUser: boolean): void {
+  if (saveState !== 'idle') return;
   target = folder;
   if (byUser) userPicked = true;
   const radio = checkedRadio(folder.id);
@@ -106,6 +118,9 @@ function renderFolder(folder: FolderNode): HTMLLIElement {
   };
 
   if (hasChildren) {
+    childrenUl.id = `folder-children-${folder.id}`;
+    toggle.setAttribute('aria-controls', childrenUl.id);
+    expandFolder.set(folder.id, setExpanded);
     toggle.addEventListener('click', () => setExpanded(!expanded.has(folder.id)));
     setExpanded(expanded.has(folder.id));
   } else {
@@ -133,14 +148,14 @@ function renderFolder(folder: FolderNode): HTMLLIElement {
 }
 
 function renderTree(): void {
+  expandFolder.clear();
   treeEl.replaceChildren(...tree.map(renderFolder));
 }
 
 function expandPath(folderId: string): void {
   for (const id of findPathIds(tree, folderId)) {
-    if (id !== folderId) expanded.add(id);
+    if (id !== folderId) expandFolder.get(id)?.(true);
   }
-  renderTree();
 }
 
 async function loadPage(): Promise<void> {
@@ -163,8 +178,20 @@ async function loadPage(): Promise<void> {
 }
 
 function applyResult(result: RecommendationResult): void {
+  if (saveState !== 'idle') return;
   if (result.kind === 'none') {
-    setStatus('模型认为现有文件夹都不合适，已选择收藏栏根目录。');
+    if (userPicked) {
+      setStatus('模型认为现有文件夹都不合适，已保留你的选择。');
+    } else {
+      const fallback = defaultTarget(tree);
+      if (fallback) {
+        selectFolder(fallback, false);
+        expandPath(fallback.id);
+      }
+      setStatus(fallback
+        ? `模型认为现有文件夹都不合适，已选择默认位置「${fallback.path}」。`
+        : '模型认为现有文件夹都不合适，当前没有可选择的文件夹。');
+    }
     return;
   }
 
@@ -201,13 +228,13 @@ function setProgress(percent: number | null): void {
 
 function showAiAction(label: string, onClick: () => void): void {
   aiActionBtn.textContent = label;
-  aiActionBtn.onclick = onClick;
+  aiAction = onClick;
   aiActionBtn.hidden = false;
 }
 
 function hideAiAction(): void {
   aiActionBtn.hidden = true;
-  aiActionBtn.onclick = null;
+  aiAction = null;
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -220,15 +247,19 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 async function openFlags(): Promise<void> {
+  const generation = aiGeneration;
   try {
     await chrome.tabs.create({ url: AI_FLAGS_URL });
+    if (!isCurrentAi(generation)) return;
     setStatus(`已打开 ${AI_FLAGS_URL}。开启后请重启浏览器，再重新打开本面板。`, 'warn');
     return;
   } catch {
     // 扩展通常无权打开浏览器内置页面，退回复制地址
   }
 
+  if (!isCurrentAi(generation)) return;
   const copied = await copyText(AI_FLAGS_URL);
+  if (!isCurrentAi(generation)) return;
   setStatus(
     copied
       ? `已复制开关地址：${AI_FLAGS_URL}\n粘贴到地址栏打开，开启后重启浏览器。`
@@ -243,8 +274,9 @@ function offerFlags(message: string): void {
 }
 
 async function runAi(downloading: boolean): Promise<void> {
-  if (!aiApi || !page || aiBusy) return;
+  if (!aiApi || !page || aiBusy || saveState !== 'idle' || disposed) return;
 
+  const generation = ++aiGeneration;
   aiBusy = true;
   const controller = new AbortController();
   activeController = controller;
@@ -262,13 +294,11 @@ async function runAi(downloading: boolean): Promise<void> {
   let session: PromptSession | null = null;
   try {
     // create() 要在用户点击后调用，浏览器才允许开始下载模型
-    session = await createSession(aiApi, (loaded) => setProgress(loaded * 100), controller.signal);
+    session = await createSession(aiApi, (loaded) => {
+      if (isCurrentAi(generation) && !controller.signal.aborted) setProgress(loaded * 100);
+    }, controller.signal);
     activeSession = session;
-    if (controller.signal.aborted) {
-      closeSession(session);
-      activeSession = null;
-      return;
-    }
+    if (!isCurrentAi(generation) || controller.signal.aborted) return;
     updateQuota(session);
     setProgress(null);
     setStatus('正在让本地模型判断合适的文件夹…');
@@ -281,9 +311,11 @@ async function runAi(downloading: boolean): Promise<void> {
       recommendationSchema(validIds),
       controller.signal,
     );
+    if (!isCurrentAi(generation) || controller.signal.aborted) return;
     hideAiAction();
     applyResult(parseRecommendation(raw, validIds));
   } catch (error) {
+    if (!isCurrentAi(generation)) return;
     setProgress(null);
     if (error instanceof Error && error.name === 'AbortError') {
       hideAiAction();
@@ -293,7 +325,7 @@ async function runAi(downloading: boolean): Promise<void> {
       showAiAction('重试推荐', () => void runAi(false));
     }
   } finally {
-    if (session) updateQuota(session);
+    if (session && isCurrentAi(generation)) updateQuota(session);
     if (activeSession === session) {
       activeSession = null;
       closeSession(session);
@@ -308,7 +340,9 @@ async function runAi(downloading: boolean): Promise<void> {
 async function initAi(): Promise<void> {
   if (!page) return;
 
+  const generation = aiGeneration;
   const { status, api, error } = await detectAi();
+  if (!isCurrentAi(generation)) return;
   aiApi = api;
   if (!api) {
     offerFlags('当前浏览器没有提供本地 AI 接口。');
@@ -332,24 +366,35 @@ async function initAi(): Promise<void> {
 }
 
 async function save(): Promise<void> {
-  if (!target || !page || saving) return;
+  if (!target || !page?.url || saveState !== 'idle' || disposed) return;
 
-  saving = true;
-  saveBtn.disabled = true;
-  const destination = target.path;
+  const destination = target;
+  const pageToSave = page;
+  saveState = 'saving';
+  // 保存取得界面更新权；旧推荐即使在保存失败后才结束，也不能覆盖事务反馈。
+  aiGeneration += 1;
+  activeController?.abort();
+  hideAiAction();
+  setProgress(null);
+  updateTarget();
   setStatus('正在保存…');
 
-  const result = await saveBookmark(bookmarks, target.id, page);
-  saving = false;
+  let result: Awaited<ReturnType<typeof saveBookmark>>;
+  try {
+    result = await saveBookmark(bookmarks, destination.id, pageToSave);
+  } catch (error) {
+    result = { ok: false, reason: `保存失败：${messageOf(error)}` };
+  }
+  if (disposed) return;
 
+  saveState = result.ok ? 'saved' : 'idle';
+  updateTarget();
   if (result.ok) {
-    saveBtn.textContent = '已保存';
-    setStatus(`已保存到「${destination}」。`, 'ok');
+    setStatus(`已保存到「${destination.path}」。`, 'ok');
     window.setTimeout(() => window.close(), 900);
     return;
   }
 
-  saveBtn.disabled = false;
   setStatus(result.reason, 'warn');
 }
 
@@ -367,9 +412,33 @@ async function init(): Promise<void> {
   renderTree();
   updateTarget();
 
-  await loadPage();
+  try {
+    await loadPage();
+  } catch (error) {
+    page = null;
+    titleEl.textContent = '无法读取当前页面';
+    urlEl.textContent = '';
+    setStatus(`无法读取当前页面：${messageOf(error)}。可以浏览收藏夹，但无法保存，请重新打开面板。`, 'warn');
+    updateTarget();
+    return;
+  }
+  if (disposed) return;
   updateTarget();
   await initAi();
+}
+
+async function initialize(): Promise<void> {
+  try {
+    await init();
+  } catch (error) {
+    if (disposed || saveState !== 'idle') return;
+    aiGeneration += 1;
+    activeController?.abort();
+    hideAiAction();
+    setProgress(null);
+    updateTarget();
+    setStatus(`面板初始化失败：${messageOf(error)}。可以手动选择文件夹；如仍无法操作，请重新打开面板。`, 'warn');
+  }
 }
 
 saveBtn.addEventListener('click', () => {
@@ -377,11 +446,16 @@ saveBtn.addEventListener('click', () => {
 });
 
 cancelBtn.addEventListener('click', () => window.close());
+aiActionBtn.addEventListener('click', () => {
+  if (saveState === 'idle' && !disposed) aiAction?.();
+});
 
 window.addEventListener('pagehide', () => {
+  disposed = true;
+  aiGeneration += 1;
   activeController?.abort();
   closeSession(activeSession);
   activeSession = null;
 });
 
-void init();
+void initialize();
