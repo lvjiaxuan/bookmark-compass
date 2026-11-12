@@ -1,11 +1,17 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
+    "chrome-extensions": {
+      "source": "GoogleChrome/modern-web-guidance",
+      "sourceType": "github",
+      "skillPath": "skills/chrome-extensions/SKILL.md",
+      "computedHash": "802ef1e0135ebd69e0eec533914754ba8ed0f080af86e55400de6e7fb22e6bae"
+    },
     "ego-browser": {
       "source": "citrolabs/ego-lite",
       "sourceType": "github",
       "skillPath": "skills/ego-browser/SKILL.md",
-      "computedHash": "b901667be378109e21f4257485f12096ec27bb7199a2a9db246ab382e993eee8",
+      "computedHash": "77ae84eb2bef38071e29d3b28f9914b1577bc712db480bf57b2247808c244f91",
       "installMode": "copy"
     }
   }

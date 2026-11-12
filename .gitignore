@@ -8,3 +8,4 @@ playwright-report/
 
 # Extension.js local session state
 .extension-js
+.agents
